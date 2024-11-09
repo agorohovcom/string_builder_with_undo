@@ -1,5 +1,6 @@
 import java.util.Arrays;
 import java.util.Objects;
+import java.util.Stack;
 
 public final class StringBuilderWithUndo
         implements Appendable, CharSequence, Comparable<StringBuilderWithUndo> {
@@ -8,6 +9,8 @@ public final class StringBuilderWithUndo
     private char[] value;
     private int count;
     private static final char[] EMPTY_VALUE = new char[0];
+
+    private final Stack<Memento> history = new Stack<>();
 
     public StringBuilderWithUndo() {
         this.value = EMPTY_VALUE;
@@ -82,7 +85,13 @@ public final class StringBuilderWithUndo
         return value.length;
     }
 
-    public void ensureCapacity(int minCapacity) {
+    public StringBuilderWithUndo ensureCapacity(int minCapacity) {
+        saveState();
+        ensureCapacityInternal(minCapacity);
+        return this;
+    }
+
+    private void ensureCapacityInternal(int minCapacity) {
         if (minCapacity > 0) {
             int oldCapacity = value.length;
             if (minCapacity - oldCapacity > 0) {
@@ -103,6 +112,7 @@ public final class StringBuilderWithUndo
     }
 
     public void trimToSize() {
+        saveState();
         value = Arrays.copyOf(value, count);
     }
 
@@ -118,16 +128,18 @@ public final class StringBuilderWithUndo
     }
 
     public void setCharAt(int index, char c) {
+        saveState();
         checkIndex(index);
         value[index] = c;
     }
 
     public StringBuilderWithUndo append(Object obj) {
+        saveState();
         return append(String.valueOf(obj));
     }
 
     private StringBuilderWithUndo appendNull() {
-        ensureCapacity(count + 4);
+        ensureCapacityInternal(count + 4);
         int count = this.count;
         char[] val = this.value;
         val[count++] = 'n';
@@ -139,11 +151,12 @@ public final class StringBuilderWithUndo
     }
 
     public StringBuilderWithUndo append(String str) {
+        saveState();
         if (str == null) {
             return appendNull();
         }
         int strLen = str.length();
-        ensureCapacity(count + strLen);
+        ensureCapacityInternal(count + strLen);
         char[] strBytes = str.toCharArray();
         System.arraycopy(strBytes, 0, value, count, strLen);
         count += strLen;
@@ -152,6 +165,7 @@ public final class StringBuilderWithUndo
 
     @Override
     public StringBuilderWithUndo append(CharSequence cs) {
+        saveState();
         if (cs == null) {
             return appendNull();
         }
@@ -163,12 +177,13 @@ public final class StringBuilderWithUndo
 
     @Override
     public StringBuilderWithUndo append(CharSequence cs, int start, int end) {
+        saveState();
         checkFromToIndex(cs.length(), start, end);
         if (cs == null) {
             cs = "null";
         }
         int len = end - start;
-        ensureCapacity(count + len);
+        ensureCapacityInternal(count + len);
         if (cs instanceof String) {
             appendChars(cs, start, end);
         } else {
@@ -199,27 +214,31 @@ public final class StringBuilderWithUndo
     }
 
     public StringBuilderWithUndo append(char[] str) {
+        saveState();
         int len = str.length;
-        ensureCapacity(count + len);
+        ensureCapacityInternal(count + len);
         appendChars(str, 0, len);
         return this;
     }
 
     public StringBuilderWithUndo append(char[] str, int off, int len) {
+        saveState();
         checkFromToIndex(str.length, off, off + len);
         int end = off + len;
-        ensureCapacity(count + len);
+        ensureCapacityInternal(count + len);
         appendChars(str, off, end);
         return this;
     }
 
     public StringBuilderWithUndo append(char c) {
-        ensureCapacity(count + 1);
+        saveState();
+        ensureCapacityInternal(count + 1);
         value[count++] = c;
         return this;
     }
 
     public StringBuilderWithUndo delete(int start, int end) {
+        saveState();
         checkIndex(start);
         int count = this.count;
         if (end > count) {
@@ -227,8 +246,6 @@ public final class StringBuilderWithUndo
         }
         int len = end - start;
         if (len > 0) {
-            System.out.println("end = " + end);
-            System.out.println("-len = " + -len);
             shift(end, -len);
             this.count = count - len;
         }
@@ -236,6 +253,7 @@ public final class StringBuilderWithUndo
     }
 
     public StringBuilderWithUndo deleteCharAt(int index) {
+        saveState();
         checkIndex(index);
         shift(index + 1, -1);
         count--;
@@ -243,11 +261,11 @@ public final class StringBuilderWithUndo
     }
 
     private void shift(int offset, int n) {
-        System.out.println(count + n);
         System.arraycopy(value, offset, value, offset + n, count - offset);
     }
 
     public void clear() {
+        saveState();
         delete(0, length());
     }
 
@@ -283,5 +301,40 @@ public final class StringBuilderWithUndo
             throw new IndexOutOfBoundsException(
                     "Value from (" + from + ") or to(" + to + ") is out of bounds with length " + length);
         }
+    }
+
+    private class Memento {
+        private final char[] value;
+        private final int count;
+
+        public Memento(char[] value, int count) {
+            this.value = Arrays.copyOf(value, value.length);
+            this.count = count;
+        }
+
+        public char[] getValue() {
+            return Arrays.copyOf(value, value.length);
+        }
+
+        public int getCount() {
+            return count;
+        }
+    }
+
+    private void saveState() {
+        history.push(new Memento(value, count));
+    }
+
+    public StringBuilderWithUndo undo() {
+        if (!history.isEmpty()) {
+            Memento memento = history.pop();
+            this.value = memento.getValue();
+            this.count = memento.getCount();
+        }
+        return this;
+    }
+
+    public void clearHistory() {
+        history.clear();
     }
 }
