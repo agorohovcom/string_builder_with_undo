@@ -1,4 +1,5 @@
 import java.util.Arrays;
+import java.util.Objects;
 
 public final class StringBuilderWithUndo
         implements Appendable, CharSequence, Comparable<StringBuilderWithUndo> {
@@ -36,6 +37,19 @@ public final class StringBuilderWithUndo
 
         value = new char[capacity];
         append(cs);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        StringBuilderWithUndo that = (StringBuilderWithUndo) o;
+        return count == that.count && Objects.deepEquals(value, that.value);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(Arrays.hashCode(value), count);
     }
 
     @Override
